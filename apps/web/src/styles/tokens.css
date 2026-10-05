@@ -1,0 +1,97 @@
+/* Generado por build.mjs desde tokens.json (Atalaya v1). No editar a mano. */
+
+:root {
+  color-scheme: dark;
+  --bg: #0e0e0d;
+  --surface-nav: #121211;
+  --surface-1: #1a1a19;
+  --surface-2: #222220;
+  --border-subtle: #2c2c2a;
+  --border-strong: #383835;
+  --ink-primary: #f7f6f2;
+  --ink-secondary: #c3c2b7;
+  --ink-muted: #898781;
+  --brand: #58266a;
+  --on-brand: #f7f6f2;
+  --accent: #9bc31a;
+  --on-accent: #141413;
+  --series-1: #3987e5;
+  --series-compare: #6b6a64;
+  --delta-up: #0ca30c;
+  --delta-down: #e66767;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --control-height: 44px;
+  --nav-width: 232px;
+  --bar-thickness: 12px;
+  --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --text-display: 600 28px/34px var(--font-sans);
+  --text-lead: 500 26px/34px var(--font-sans);
+  --text-kpi: 600 30px/33px var(--font-sans);
+  --text-heading: 600 16px/22px var(--font-sans);
+  --text-body: 400 14px/20px var(--font-sans);
+  --text-body-strong: 500 14px/20px var(--font-sans);
+  --text-caption: 400 12px/17px var(--font-sans);
+  --text-data: 400 13px/18px var(--font-mono);
+  --text-data-small: 400 12px/17px var(--font-mono);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f9f9f7;
+  --surface-nav: #f3f2ee;
+  --surface-1: #fcfcfb;
+  --surface-2: #f0efec;
+  --border-subtle: #e1e0d9;
+  --border-strong: #c3c2b7;
+  --ink-primary: #0b0b0b;
+  --ink-secondary: #52514e;
+  --ink-muted: #6b6a64;
+  --brand: #58266a;
+  --on-brand: #f7f6f2;
+  --accent: #9bc31a;
+  --on-accent: #141413;
+  --series-1: #2a78d6;
+  --series-compare: #898781;
+  --delta-up: #006300;
+  --delta-down: #d03b3b;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: #f9f9f7;
+    --surface-nav: #f3f2ee;
+    --surface-1: #fcfcfb;
+    --surface-2: #f0efec;
+    --border-subtle: #e1e0d9;
+    --border-strong: #c3c2b7;
+    --ink-primary: #0b0b0b;
+    --ink-secondary: #52514e;
+    --ink-muted: #6b6a64;
+    --brand: #58266a;
+    --on-brand: #f7f6f2;
+    --accent: #9bc31a;
+    --on-accent: #141413;
+    --series-1: #2a78d6;
+    --series-compare: #898781;
+    --delta-up: #006300;
+    --delta-down: #d03b3b;
+    --status-warning: #fab219;
+    --status-serious: #ec835a;
+  }
+}
