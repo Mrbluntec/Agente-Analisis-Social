@@ -1,0 +1,12 @@
+{
+  "name": "atalaya",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "setup": "npm --prefix apps/api install && npm --prefix apps/web install",
+    "dev": "node scripts/dev.mjs",
+    "test": "npm --prefix apps/api test",
+    "build": "npm --prefix apps/web run build"
+  }
+}
