@@ -85,7 +85,7 @@ Se eligió Vite con React en lugar de Next.js, que era lo previsto en el plan. L
 
 Construir contra el contrato sacó a la luz tres ajustes, ya aplicados en `api/openapi.yaml`:
 
-- **Adjuntos en las respuestas del agente.** `AgentRun.attachments` lleva gráficos de columnas (`RunAttachment`). La web los pinta desde ahí; el agente simulado adjunta uno. El agente real todavía no adjunta ninguno.
+- **Adjuntos en las respuestas del agente.** `AgentRun.attachments` lleva gráficos de columnas (`RunAttachment`). La web los pinta desde ahí; el agente simulado adjunta uno. El agente real los adjunta con la herramienta `adjuntar_grafico`: el modelo solo indica de qué herramienta tomar los datos y el servidor construye los puntos, de modo que el gráfico nunca lleva cifras escritas por el modelo (fuentes: `consultar_metricas`, `indice_formatos`, `historias_por_franja`). Probado contra el Ollama de mentira, no con un modelo real.
 - **`up_is_good` en `Kpi`.** Ahora es obligatorio y sin valor por defecto.
 - **Filtros de Contenido.** La respuesta de publicaciones incluye `available_pillars` y `available_formats`, calculados sobre el periodo sin aplicar los filtros.
 

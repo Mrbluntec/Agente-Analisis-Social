@@ -8,7 +8,7 @@ import type { AgentRun, Citation, Conversation } from '../../../../packages/core
 import type { KeyScope, KeyStore } from '../keys';
 import { OllamaError, type ChatMessage, type Ollama, type OllamaModel, type ThinkValue, type ToolCall } from '../ollama';
 import { systemPrompt } from './prompt';
-import { TOOL_DEFINITIONS, runTool } from './tools';
+import { TOOL_DEFINITIONS, runTool, type PriorResult } from './tools';
 
 /** Carga del campo `data` de cada evento, con la forma `AgentEvent` del contrato. */
 export type AgentEvent =
@@ -139,6 +139,7 @@ export class AgentService {
         answer: null,
         tool_calls: [],
         citations: [],
+        attachments: [],
         queued_at: new Date().toISOString(),
         started_at: null,
         finished_at: null,
@@ -233,6 +234,7 @@ export class AgentService {
       const think = parseThink(run.think);
       const maxRounds = this.options.maxToolRounds ?? 6;
       let seq = 0;
+      const prior: PriorResult[] = [];
 
       for (let round = 0; ; round += 1) {
         // Pasado el tope de vueltas se retiran las herramientas para obligar a responder.
@@ -273,7 +275,9 @@ export class AgentService {
           run.tool_calls!.push({ seq, tool: call.function.name, arguments: args, result_summary: null, duration_ms: null });
           this.emit(record, { type: 'tool.call', seq, tool: call.function.name, arguments: args });
           const started = Date.now();
-          const result = runTool(call.function.name, args);
+          const result = runTool(call.function.name, args, prior);
+          prior.push({ seq, tool: call.function.name, data: result.data });
+          if (result.attachment) run.attachments!.push(result.attachment);
           const duration_ms = Date.now() - started;
           const entry = run.tool_calls![seq - 1];
           entry.result_summary = result.summary;

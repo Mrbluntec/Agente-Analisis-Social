@@ -59,8 +59,12 @@ before(async () => {
       res.writeHead(200, { 'content-type': 'application/x-ndjson' });
       const line = (o: unknown) => res.write(`${JSON.stringify(o)}\n`);
       if (chatDelayMs) await new Promise((r) => setTimeout(r, chatDelayMs));
-      const answered = body.messages.some((m: { role: string }) => m.role === 'tool');
-      if (!answered) {
+      const toolRounds = body.messages.filter((m: { role: string }) => m.role === 'tool').length;
+      const wantsChart = body.messages.some((m: { role: string; content: string }) => m.role === 'user' && m.content.includes('gráfico'));
+      if (wantsChart && toolRounds === 1) {
+        line({ message: { role: 'assistant', content: '', tool_calls: [{ type: 'function', function: { index: 0, name: 'adjuntar_grafico', arguments: { fuente: 1, titulo: 'Alcance por red' } } }] } });
+        line({ done: true, done_reason: 'stop' });
+      } else if (toolRounds === 0) {
         line({ message: { role: 'assistant', thinking: 'Necesito las ' } });
         line({ message: { role: 'assistant', thinking: 'cifras del periodo.' } });
         line({ message: { role: 'assistant', content: '', tool_calls: [{ type: 'function', function: { index: 0, name: 'consultar_metricas', arguments: { days: 28 } } }] } });
@@ -268,4 +272,22 @@ test('si Ollama revoca la clave a mitad de camino, la ejecución falla con su c�
   const last = seen.at(-1)!;
   assert.equal(last.type, 'run.failed');
   assert.equal(last.code, 'ollama_key_rejected');
+});
+
+test('el agente adjunta un gráfico construido con los datos de una herramienta, no con cifras del modelo', async () => {
+  const { post, call, keys } = setup();
+  keys.set('org', GOOD_KEY, 1, true);
+  const { run } = (await (await post(`/brands/${BRAND}/agent/conversations`, { question: 'Muéstreme un gráfico por red' })).json()) as { run: { id: string } };
+  const seen = await events(call, run.id);
+  assert.equal(seen.at(-1)?.type, 'run.completed');
+  const final = (await (await call(`/agent/runs/${run.id}`)).json()) as {
+    attachments: { kind: string; title: string; ref: number; points: { label: string; value: number }[] }[];
+    tool_calls: { tool: string }[];
+  };
+  assert.deepEqual(final.tool_calls.map((t) => t.tool), ['consultar_metricas', 'adjuntar_grafico']);
+  assert.equal(final.attachments.length, 1);
+  assert.equal(final.attachments[0].title, 'Alcance por red');
+  assert.equal(final.attachments[0].ref, 1);
+  assert.ok(final.attachments[0].points.length >= 2);
+  assert.ok(final.attachments[0].points.every((p) => typeof p.label === 'string' && p.value > 0));
 });

@@ -5,12 +5,21 @@
 import { getBrandSummary, getLatestBriefing, getPost, getTimeseries, listAlerts, listPosts, type PostSort, type Scope } from '../../../../packages/core/src/analytics';
 import { fmtCompact, fmtDay, fmtPct, fmtSignedPct, fmtTimes } from '../../../../packages/core/src/format';
 import { ACTIVE_NETWORKS, STORIES_BY_HOUR, type ActiveNetwork } from '../../../../packages/core/src/sample';
-import type { PostFormat } from '../../../../packages/core/src/types';
+import type { PostFormat, RunAttachment } from '../../../../packages/core/src/types';
 import type { ToolDefinition } from '../ollama';
 
 export interface ToolResult {
   data: unknown;
   summary: string;
+  /** Gráfico que la herramienta adjunta a la respuesta final. */
+  attachment?: RunAttachment;
+}
+
+/** Resultado de una herramienta ya ejecutada en esta ejecución, por su número. */
+export interface PriorResult {
+  seq: number;
+  tool: string;
+  data: unknown;
 }
 
 type Args = Record<string, unknown>;
@@ -34,7 +43,7 @@ const scopeProperties = {
 
 interface Tool {
   definition: ToolDefinition;
-  run: (args: Args) => ToolResult;
+  run: (args: Args, prior: PriorResult[]) => ToolResult;
 }
 
 const tool = (name: string, description: string, properties: Record<string, unknown>, required: string[], run: Tool['run']): Tool => ({
@@ -160,16 +169,51 @@ const TOOLS: Tool[] = [
   }),
 ];
 
+// Gráficos que se pueden construir, por herramienta de origen. El modelo nunca escribe los
+// puntos: salen del resultado de la herramienta citada, así que cada cifra sigue siendo trazable.
+type Points = RunAttachment['points'];
+const CHART_SOURCES: Record<string, { unit?: RunAttachment['unit']; points: (data: any) => Points }> = {
+  consultar_metricas: { unit: 'count', points: (d) => (d.by_network as { network: string; value: number }[]).map((n) => ({ label: n.network, value: n.value })) },
+  indice_formatos: { points: (d) => (d.formats as { format: string; index: number }[]).map((f, i) => ({ label: f.format, value: Number(f.index.toFixed(2)), highlight: i === 0 })) },
+  historias_por_franja: { unit: 'count', points: (d) => (d.by_publish_hour as { hour: string; mean_reach: number }[]).map((h) => ({ label: h.hour, value: h.mean_reach })) },
+};
+
+TOOLS.push(
+  tool(
+    'adjuntar_grafico',
+    `Adjunta a la respuesta un gráfico de columnas hecho con los datos de una herramienta que ya llamó. Úsela una vez, solo cuando el gráfico aclare la conclusión. Fuentes admitidas: ${Object.keys(CHART_SOURCES).join(', ')}.`,
+    {
+      fuente: { type: 'integer', minimum: 1, description: 'El «herramienta_numero» de la herramienta cuyos datos se grafican.' },
+      titulo: { type: 'string', description: 'Título del gráfico, en una frase.' },
+    },
+    ['fuente', 'titulo'],
+    (args, prior) => {
+      const source = prior.find((p) => p.seq === Number(args.fuente));
+      if (!source) return { data: { error: 'No hay una herramienta con ese número en esta conversación.' }, summary: 'La fuente del gráfico no existe.' };
+      const spec = CHART_SOURCES[source.tool];
+      if (!spec) return { data: { error: `Esa herramienta no se puede graficar. Admitidas: ${Object.keys(CHART_SOURCES).join(', ')}.` }, summary: `${source.tool} no se puede graficar.` };
+      const points = spec.points(source.data);
+      if (points.length === 0) return { data: { error: 'La fuente no trae datos que graficar.' }, summary: 'La fuente no trae datos.' };
+      const title = typeof args.titulo === 'string' && args.titulo.trim() ? args.titulo.trim().slice(0, 120) : 'Gráfico';
+      return {
+        data: { ok: true, puntos: points.length },
+        summary: `Gráfico «${title}» con ${points.length} columnas, de la herramienta ${source.seq}.`,
+        attachment: { kind: 'columns', title, unit: spec.unit, ref: source.seq, points },
+      };
+    },
+  ),
+);
+
 export const TOOL_DEFINITIONS: ToolDefinition[] = TOOLS.map((t) => t.definition);
 
-export function runTool(name: string, args: Args): ToolResult {
+export function runTool(name: string, args: Args, prior: PriorResult[] = []): ToolResult {
   const found = TOOLS.find((t) => t.definition.function.name === name);
   if (!found) {
     const known = TOOLS.map((t) => t.definition.function.name).join(', ');
     return { data: { error: `No existe la herramienta ${name}. Disponibles: ${known}.` }, summary: `Herramienta desconocida: ${name}.` };
   }
   try {
-    return found.run(args ?? {});
+    return found.run(args ?? {}, prior);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     return { data: { error: message }, summary: `La herramienta falló: ${message}` };
