@@ -101,7 +101,7 @@ const TOOLS: Tool[] = [
       }));
       const first = list.items[0];
       return {
-        data: { total_in_period: list.total, matching: list.items.length, account_median_reach: list.account_median_reach, pillars: list.pillars, items },
+        data: { total_in_period: list.total, matching: list.items.length, account_median_reach: list.account_median_reach, pillars: list.available_pillars, items },
         summary: first
           ? `${list.items.length} piezas; la primera es «${first.title}» con ${fmtCompact(first.metrics.reach ?? first.metrics.views ?? 0)}${first.vs_median ? `, ${fmtTimes(first.vs_median)} la mediana` : ''}.`
           : 'Ninguna pieza coincide con esos filtros.',

@@ -18,6 +18,7 @@ export type Alert = S['Alert'];
 export type Brand = S['Brand'];
 export type SocialAccount = S['SocialAccount'];
 export type AgentRun = S['AgentRun'];
+export type RunAttachment = S['RunAttachment'];
 export type AgentEvent = S['AgentEvent'];
 export type AgentQueue = S['AgentQueue'];
 export type AgentModel = S['AgentModel'];

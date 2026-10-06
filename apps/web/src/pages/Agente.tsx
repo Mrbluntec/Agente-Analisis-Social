@@ -5,7 +5,7 @@ import { hasKey, type ApiState } from '../api/state';
 import type { AgentModel, AgentQueue } from '../api/types';
 import { Columns } from '../components/charts';
 import { Icon, Segmented } from '../components/ui';
-import { BRAND, STORIES_BY_HOUR } from '../data/sample';
+import { BRAND } from '../data/sample';
 import { fmtCompact } from '../lib/format';
 
 /** Preguntas con respuesta de ejemplo en el agente simulado. */
@@ -101,15 +101,15 @@ function Run({ run, suggestions, onAsk, busy }: { run: RunView; suggestions: str
         </div>
       )}
 
-      {run.status === 'succeeded' && run.chart === 'stories_by_hour' && (
-        <figure className="card panel figure-card">
+      {run.status === 'succeeded' && (run.attachments ?? []).map((att, i) => (
+        <figure key={i} className="card panel figure-card">
           <figcaption className="stack">
-            <b>Alcance medio de una historia según la hora de publicación</b>
-            <span className="secondary">Instagram · 10 ago – 4 oct · 142 historias</span>
+            <b>{att.title}</b>
+            {att.ref != null && <span className="secondary">Cifras de la fuente [{att.ref}]</span>}
           </figcaption>
-          <Columns format={fmtCompact} items={STORIES_BY_HOUR.map((s) => ({ key: s.hour, label: s.hour, note: s.note || undefined, value: s.reach, emphasis: s.note === 'habitual' }))} />
+          <Columns format={fmtCompact} items={att.points.map((pt) => ({ key: pt.label, label: pt.label, value: pt.value, emphasis: pt.highlight }))} />
         </figure>
-      )}
+      ))}
 
       {run.status === 'succeeded' && advice && (
         <div className="advice">

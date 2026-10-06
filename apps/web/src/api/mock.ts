@@ -2,8 +2,8 @@
 // publicada): reproduce el orden de eventos del contrato con respuestas escritas a mano.
 // La analítica vive en packages/core y se reexporta aquí para las pantallas.
 
-import { BRAND } from '@core/sample';
-import type { AgentQueue, AgentRun, Citation, ToolCall } from '@core/types';
+import { BRAND, STORIES_BY_HOUR } from '@core/sample';
+import type { AgentQueue, AgentRun, Citation, RunAttachment, ToolCall } from '@core/types';
 
 export * from '@core/analytics';
 
@@ -21,8 +21,6 @@ export function getAgentQueue(extraRunning: number): AgentQueue {
 
 /** Lo que la pantalla del agente pinta: una ejecución del contrato más dos extras de la muestra. */
 export interface RunView extends AgentRun {
-  /** Gráfico adjunto a la respuesta. El contrato aún no lo contempla: ver README. */
-  chart?: 'stories_by_hour';
   advice?: string;
   duration_s?: number;
   /** Código del fallo cuando la ejecución viene del servidor real. */
@@ -35,7 +33,7 @@ interface Script {
   answer: string;
   advice?: string;
   citations: Citation[];
-  chart?: RunView['chart'];
+  attachments?: RunAttachment[];
 }
 
 const SCRIPTS: Record<'stories' | 'facebook' | 'slots' | 'fallback', Script> = {
@@ -55,7 +53,15 @@ const SCRIPTS: Record<'stories' | 'facebook' | 'slots' | 'fallback', Script> = {
       { ref: 1, label: 'Historias de Instagram por hora de publicación, 10 ago – 4 oct.', tool: 'consultar_metricas', query: { metric: 'reach', format: 'story', group_by: 'publish_hour', weeks: 8 } },
       { ref: 2, label: 'Alcance diario de la cuenta, 1 oct.', tool: 'consultar_metricas', query: { metric: 'reach', date: '2026-10-01' } },
     ],
-    chart: 'stories_by_hour',
+    attachments: [
+      {
+        kind: 'columns',
+        title: 'Alcance medio de una historia según la hora de publicación',
+        unit: 'count',
+        ref: 1,
+        points: STORIES_BY_HOUR.map((s) => ({ label: s.hour, value: s.reach, highlight: s.note === 'habitual' })),
+      },
+    ],
   },
   facebook: {
     thinking: 'Antes de comparar franjas compruebo si Facebook tiene suficientes historias. Con muy pocas, cualquier diferencia entre horas sería ruido.',
@@ -128,7 +134,7 @@ export function completedRun(question: string, model: string): RunView {
     answer: s.answer,
     tool_calls: s.tools.map((t, i) => ({ ...t, seq: i + 1 })),
     citations: s.citations,
-    chart: s.chart,
+    attachments: s.attachments ?? [],
     advice: s.advice,
     duration_s: 14,
   };
@@ -174,7 +180,7 @@ export function streamRun(question: string, model: string, onUpdate: (run: RunVi
     ...r,
     status: 'succeeded',
     citations: s.citations,
-    chart: s.chart,
+    attachments: s.attachments ?? [],
     advice: s.advice,
     finished_at: new Date().toISOString(),
     duration_s: Math.max(1, Math.round((Date.now() - started) / 1000)),

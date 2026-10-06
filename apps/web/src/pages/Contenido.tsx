@@ -116,14 +116,14 @@ export function Contenido({ scope }: { scope: Scope }) {
           <span>Formato</span>
           <select value={filters.format} onChange={(e) => setFilters({ ...filters, format: e.target.value as PostFormat | '' })}>
             <option value="">Todos</option>
-            {list.formats.map((f) => <option key={f} value={f}>{FORMAT_LABEL[f]}</option>)}
+            {list.available_formats.map((f) => <option key={f} value={f}>{FORMAT_LABEL[f]}</option>)}
           </select>
         </label>
         <label className="field">
           <span>Pilar</span>
           <select value={filters.pillar} onChange={(e) => setFilters({ ...filters, pillar: e.target.value })}>
             <option value="">Todos</option>
-            {list.pillars.map((p) => <option key={p} value={p}>{p}</option>)}
+            {list.available_pillars.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </label>
         <label className="field">

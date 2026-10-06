@@ -202,8 +202,8 @@ export interface PostList {
   total: number;
   account_median_reach: number | null;
   insight?: Insight;
-  pillars: string[];
-  formats: PostFormat[];
+  available_pillars: string[];
+  available_formats: PostFormat[];
 }
 
 export function listPosts(scope: Scope, filters: PostFilters): PostList {
@@ -242,8 +242,8 @@ export function listPosts(scope: Scope, filters: PostFilters): PostList {
     total: inScope.length,
     account_median_reach: accountMedian,
     insight: insight(text),
-    pillars: [...new Set(inScope.map((p) => p.pillar))].sort(),
-    formats: [...new Set(inScope.map((p) => p.format))],
+    available_pillars: [...new Set(inScope.map((p) => p.pillar))].sort(),
+    available_formats: [...new Set(inScope.map((p) => p.format))],
   };
 }
 

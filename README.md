@@ -83,11 +83,11 @@ Se eligió Vite con React en lugar de Next.js, que era lo previsto en el plan. L
 
 ## Lo que la aplicación reveló del contrato
 
-Construir contra el contrato sacó a la luz tres ajustes pendientes en `api/openapi.yaml`:
+Construir contra el contrato sacó a la luz tres ajustes, ya aplicados en `api/openapi.yaml`:
 
-- **Adjuntos en las respuestas del agente.** La respuesta de muestra incluye un gráfico; `AgentRun` no tiene dónde llevarlo, y el agente real todavía no puede adjuntar ninguno. Hoy vive como extra en `RunView` (`apps/web/src/api/mock.ts`).
-- **`up_is_good` en `Kpi`.** Al tener valor por defecto, el generador de tipos lo trata como obligatorio. O se declara obligatorio o se quita el valor por defecto.
-- **Lista de pilares y formatos disponibles.** Los filtros de Contenido necesitan saber qué valores existen en el periodo; la ruta de publicaciones no los devuelve.
+- **Adjuntos en las respuestas del agente.** `AgentRun.attachments` lleva gráficos de columnas (`RunAttachment`). La web los pinta desde ahí; el agente simulado adjunta uno. El agente real todavía no adjunta ninguno.
+- **`up_is_good` en `Kpi`.** Ahora es obligatorio y sin valor por defecto.
+- **Filtros de Contenido.** La respuesta de publicaciones incluye `available_pillars` y `available_formats`, calculados sobre el periodo sin aplicar los filtros.
 
 ## Decisiones que el esquema ya toma
 

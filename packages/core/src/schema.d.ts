@@ -680,7 +680,7 @@ export interface components {
             delta?: number | null;
             /** @enum {string} */
             delta_kind?: "relative" | "points" | "absolute";
-            /** @default true */
+            /** @description Falso en métricas donde bajar es mejorar (p. ej. bajas o tiempo de respuesta). */
             up_is_good: boolean;
             /** @description Doce valores semanales que terminan en el periodo actual. */
             sparkline?: number[];
@@ -874,6 +874,8 @@ export interface components {
             answer?: string | null;
             tool_calls?: components["schemas"]["ToolCall"][];
             citations?: components["schemas"]["Citation"][];
+            /** @description Gráficos que el agente adjunta a su respuesta. */
+            attachments?: components["schemas"]["RunAttachment"][];
             /** Format: date-time */
             queued_at: string;
             /** Format: date-time */
@@ -885,6 +887,21 @@ export interface components {
             /** @description Tokens generados sumados en todas las vueltas. */
             completion_tokens?: number | null;
             error?: string | null;
+        };
+        /** @description Gráfico de columnas que acompaña a una respuesta; cada punto sale de la consulta que cita `ref`. */
+        RunAttachment: {
+            /** @enum {string} */
+            kind: "columns";
+            title: string;
+            /** @enum {string} */
+            unit?: "count" | "percent" | "seconds" | "minutes" | "currency";
+            /** @description Número [n] de la cita que respalda el gráfico. */
+            ref?: number | null;
+            points: {
+                label: string;
+                value: number;
+                highlight?: boolean;
+            }[];
         };
         ToolCall: {
             seq: number;
@@ -1539,6 +1556,10 @@ export interface operations {
                     "application/json": {
                         items: components["schemas"]["PostRow"][];
                         total: number;
+                        /** @description Pilares con publicaciones en el periodo y las redes elegidas, sin aplicar los filtros de formato ni pilar; alimentan los selectores. */
+                        available_pillars: string[];
+                        /** @description Formatos con publicaciones en el periodo y las redes elegidas, sin aplicar los filtros de formato ni pilar. */
+                        available_formats: components["schemas"]["PostFormat"][];
                         account_median_reach: number | null;
                         insight?: components["schemas"]["Insight"];
                         next_cursor: string | null;

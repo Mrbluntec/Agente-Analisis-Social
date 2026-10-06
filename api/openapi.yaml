@@ -422,12 +422,20 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, account_median_reach, next_cursor]
+                required: [items, total, account_median_reach, available_pillars, available_formats, next_cursor]
                 properties:
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/PostRow' }
                   total: { type: integer, minimum: 0 }
+                  available_pillars:
+                    type: array
+                    description: Pilares con publicaciones en el periodo y las redes elegidas, sin aplicar los filtros de formato ni pilar; alimentan los selectores.
+                    items: { type: string }
+                  available_formats:
+                    type: array
+                    description: Formatos con publicaciones en el periodo y las redes elegidas, sin aplicar los filtros de formato ni pilar.
+                    items: { $ref: '#/components/schemas/PostFormat' }
                   account_median_reach: { type: [number, 'null'] }
                   insight: { $ref: '#/components/schemas/Insight' }
                   next_cursor: { type: [string, 'null'] }
@@ -1017,7 +1025,7 @@ components:
 
     Kpi:
       type: object
-      required: [metric, value, unit]
+      required: [metric, value, unit, up_is_good]
       properties:
         metric: { type: string }
         value: { type: number }
@@ -1027,7 +1035,9 @@ components:
           type: [number, 'null']
           description: Variación relativa (0.184 = +18,4 %); en métricas porcentuales, diferencia en puntos.
         delta_kind: { type: string, enum: [relative, points, absolute] }
-        up_is_good: { type: boolean, default: true }
+        up_is_good:
+          type: boolean
+          description: Falso en métricas donde bajar es mejorar (p. ej. bajas o tiempo de respuesta).
         sparkline:
           type: array
           description: Doce valores semanales que terminan en el periodo actual.
@@ -1280,12 +1290,35 @@ components:
         citations:
           type: array
           items: { $ref: '#/components/schemas/Citation' }
+        attachments:
+          type: array
+          description: Gráficos que el agente adjunta a su respuesta.
+          items: { $ref: '#/components/schemas/RunAttachment' }
         queued_at: { type: string, format: date-time }
         started_at: { type: [string, 'null'], format: date-time }
         finished_at: { type: [string, 'null'], format: date-time }
         prompt_tokens: { type: [integer, 'null'], description: Tokens de entrada sumados en todas las vueltas. }
         completion_tokens: { type: [integer, 'null'], description: Tokens generados sumados en todas las vueltas. }
         error: { type: [string, 'null'] }
+
+    RunAttachment:
+      type: object
+      description: Gráfico de columnas que acompaña a una respuesta; cada punto sale de la consulta que cita `ref`.
+      required: [kind, title, points]
+      properties:
+        kind: { type: string, enum: [columns] }
+        title: { type: string }
+        unit: { type: string, enum: [count, percent, seconds, minutes, currency] }
+        ref: { type: [integer, 'null'], description: "Número [n] de la cita que respalda el gráfico." }
+        points:
+          type: array
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string }
+              value: { type: number }
+              highlight: { type: boolean }
 
     ToolCall:
       type: object
