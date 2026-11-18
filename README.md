@@ -47,10 +47,23 @@ Abra http://localhost:5173, vaya a **Agente** y pulse **Conectar clave**. La cla
 
 Otras órdenes:
 
-- `npm test` ejecuta las pruebas del servidor contra un Ollama de mentira.
+- `npm test` ejecuta las pruebas del servidor contra un Ollama de mentira. Las de PostgreSQL se saltan si no hay `DATABASE_URL`.
 - `npm run build` comprueba los tipos de la web y la compila a `apps/web/dist/`.
 - En `apps/web`: `npm run types` regenera los tipos desde `api/openapi.yaml`, y `node scripts/single-file.mjs` empaqueta la web compilada en un solo archivo.
 - Para probar el circuito sin clave ni créditos: `node apps/api/scripts/fake-ollama.mjs` en una terminal y `OLLAMA_BASE_URL=http://localhost:11500 npm run dev` en otra. Acepta cualquier clave que empiece por «demo».
+
+### Guardar conversaciones en PostgreSQL
+
+Sin `DATABASE_URL`, conversaciones y ejecuciones viven en memoria, como siempre. Con ella, se guardan en `agent_conversations`, `agent_runs`, `agent_tool_calls` y `agent_citations` (los gráficos adjuntos, en `agent_runs.attachments`) y siguen ahí tras reiniciar:
+
+```sh
+createdb atalaya
+export DATABASE_URL=postgres://usuario:contraseña@localhost:5432/atalaya
+npm --prefix apps/api run db:seed   # migraciones pendientes (0003 se salta sin Timescale) + marca de muestra; se puede repetir
+npm run dev
+```
+
+`db:migrate` aplica solo las migraciones. Las ejecuciones que estaban en cola o en curso al apagarse quedan como fallidas al arrancar. Los eventos del streaming no se guardan: una ejecución anterior al reinicio solo reproduce su evento final. La marca debe existir en `brands`; la semilla crea la de muestra.
 
 ### Qué es real y qué es de muestra
 
@@ -62,7 +75,7 @@ Otras órdenes:
 | Cola por clave y cancelación | Real, en memoria |
 | Datos que el agente consulta | De muestra: la marca ficticia de `packages/core/src/sample.ts` |
 | Inicio, Resumen y Contenido | De muestra, calculados en el navegador |
-| Conversaciones y ejecuciones | En memoria; se pierden al reiniciar el servidor |
+| Conversaciones y ejecuciones | En PostgreSQL si hay `DATABASE_URL`; si no, en memoria y se pierden al reiniciar |
 | Inicio de sesión | No hay: el servidor atiende a un único usuario local |
 
 Si la web no encuentra el servidor, sigue funcionando con un agente simulado y lo indica en pantalla. Así se comporta la vista publicada.
@@ -70,7 +83,7 @@ Si la web no encuentra el servidor, sigue funcionando con un agente simulado y l
 ### Cómo está organizado
 
 - `packages/core`: datos de muestra, cálculos de analítica, formato de cifras y tipos del contrato. Lo comparten la web y el servidor.
-- `apps/api`: servidor (Hono). `src/ollama.ts` habla con Ollama, `src/keys.ts` cifra las claves, `src/agent/` contiene las herramientas, las instrucciones y el bucle del agente, y `src/app.ts` las rutas.
+- `apps/api`: servidor (Hono). `src/ollama.ts` habla con Ollama, `src/keys.ts` cifra las claves, `src/agent/` contiene las herramientas, las instrucciones y el bucle del agente, `src/store/` guarda conversaciones y ejecuciones (memoria o PostgreSQL) y `src/app.ts` las rutas.
 - `apps/web`: la aplicación. `src/api/live.ts` llama al servidor; `src/api/mock.ts` es el agente simulado.
 
 Se eligió Vite con React en lugar de Next.js, que era lo previsto en el plan. La API es un servicio aparte, así que la web de la fase 1 no necesita servidor propio; el renderizado en servidor solo hace falta para los reportes compartidos de la fase 2, y los componentes se pueden llevar a Next.js entonces sin reescribirlos.

@@ -1,12 +1,13 @@
 // Servicio del agente: cola por clave, bucle de razonamiento con herramientas contra
-// Ollama y registro de eventos para servirlos en streaming. El estado vive en memoria;
-// pasará a la base de datos (agent_runs, agent_tool_calls, agent_citations) más adelante.
+// Ollama y registro de eventos para servirlos en streaming. Conversaciones y ejecuciones
+// se guardan en un AgentStore (memoria o PostgreSQL); los eventos en vivo, en memoria.
 
 import { randomUUID } from 'node:crypto';
 import { BRAND } from '../../../../packages/core/src/sample';
 import type { AgentRun, Citation, Conversation } from '../../../../packages/core/src/types';
 import type { KeyScope, KeyStore } from '../keys';
 import { OllamaError, type ChatMessage, type Ollama, type OllamaModel, type ThinkValue, type ToolCall } from '../ollama';
+import { MemoryAgentStore, type AgentStore } from '../store';
 import { systemPrompt } from './prompt';
 import { TOOL_DEFINITIONS, runTool, type PriorResult } from './tools';
 
@@ -38,11 +39,6 @@ interface RunRecord {
   abort: AbortController;
 }
 
-interface ConversationRecord {
-  conversation: Conversation;
-  runIds: string[];
-}
-
 export interface NewMessage {
   question: string;
   model?: string;
@@ -58,16 +54,21 @@ export interface AgentOptions {
   /** Vueltas máximas de herramientas antes de forzar la respuesta. */
   maxToolRounds?: number;
   modelCacheMs?: number;
+  /** Dónde se guardan conversaciones y ejecuciones. Por defecto, en memoria. */
+  store?: AgentStore;
 }
 
 export class AgentService {
+  /** Ejecuciones de este proceso: eventos en vivo, oyentes y cancelación. */
   private readonly runs = new Map<string, RunRecord>();
-  private readonly conversations = new Map<string, ConversationRecord>();
+  readonly store: AgentStore;
   private readonly active: Record<KeyScope, number> = { org: 0, user: 0 };
   private readonly waiting: Record<KeyScope, RunRecord[]> = { org: [], user: [] };
   private models: { at: number; items: OllamaModel[] } | null = null;
 
-  constructor(private readonly ollama: Ollama, private readonly keys: KeyStore, private readonly options: AgentOptions) {}
+  constructor(private readonly ollama: Ollama, private readonly keys: KeyStore, private readonly options: AgentOptions) {
+    this.store = options.store ?? new MemoryAgentStore();
+  }
 
   // ----- Modelos -----
 
@@ -88,21 +89,19 @@ export class AgentService {
 
   // ----- Conversaciones y ejecuciones -----
 
-  listConversations(brandId: string): Conversation[] {
-    return [...this.conversations.values()]
-      .filter((c) => c.conversation.brand_id === brandId)
-      .map((c) => c.conversation)
-      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  listConversations(brandId: string): Promise<Conversation[]> {
+    return this.store.listConversations(brandId);
   }
 
-  getConversation(id: string) {
-    const record = this.conversations.get(id);
-    if (!record) return null;
-    return { conversation: record.conversation, runs: record.runIds.map((r) => this.runs.get(r)!.run) };
+  /** La versión en vivo de cada ejecución manda sobre la guardada, que puede ir por detrás. */
+  async getConversation(id: string) {
+    const found = await this.store.getConversation(id);
+    if (!found) return null;
+    return { conversation: found.conversation, runs: found.runs.map((r) => this.runs.get(r.id)?.run ?? r) };
   }
 
-  getRun(id: string): AgentRun | null {
-    return this.runs.get(id)?.run ?? null;
+  async getRun(id: string): Promise<AgentRun | null> {
+    return this.runs.get(id)?.run ?? (await this.store.getRun(id));
   }
 
   async start(brandId: string, conversationId: string | null, message: NewMessage): Promise<{ conversation: Conversation; run: AgentRun }> {
@@ -113,11 +112,11 @@ export class AgentService {
     const model = message.model ? models.find((m) => m.name === message.model) : models[0];
     if (!model) throw new ModelNotAllowedError(message.model ?? '');
 
-    let conv = conversationId ? this.conversations.get(conversationId) : undefined;
-    if (!conv) {
+    let conversation = conversationId ? (await this.store.getConversation(conversationId))?.conversation : undefined;
+    if (!conversation) {
       const title = message.question.length > 60 ? `${message.question.slice(0, 57)}…` : message.question;
-      conv = { conversation: { id: randomUUID(), brand_id: brandId, title, mode: 'analyst', created_at: new Date().toISOString() }, runIds: [] };
-      this.conversations.set(conv.conversation.id, conv);
+      conversation = { id: randomUUID(), brand_id: brandId, title, mode: 'analyst', created_at: new Date().toISOString() };
+      await this.store.saveConversation(conversation);
     }
 
     const record: RunRecord = {
@@ -128,7 +127,7 @@ export class AgentService {
       abort: new AbortController(),
       run: {
         id: randomUUID(),
-        conversation_id: conv.conversation.id,
+        conversation_id: conversation.id,
         mode: 'analyst',
         status: 'queued',
         model: model.name,
@@ -146,23 +145,25 @@ export class AgentService {
         error: null,
       },
     };
+    await this.store.saveRun(record.run, brandId);
     this.runs.set(record.run.id, record);
-    conv.runIds.push(record.run.id);
 
     this.waiting[key.scope].push(record);
     this.emit(record, { type: 'run.queued', position: this.waiting[key.scope].length - 1 });
     this.pump(key.scope);
-    return { conversation: conv.conversation, run: record.run };
+    return { conversation, run: record.run };
   }
 
-  cancel(id: string): 'cancelled' | 'finished' | 'missing' {
+  async cancel(id: string): Promise<'cancelled' | 'finished' | 'missing'> {
     const record = this.runs.get(id);
-    if (!record) return 'missing';
+    // Lo guardado de antes de un reinicio ya terminó (recoverInterrupted cierra lo pendiente).
+    if (!record) return (await this.store.getRun(id)) ? 'finished' : 'missing';
     if (record.run.status !== 'queued' && record.run.status !== 'running') return 'finished';
     const wasQueued = record.run.status === 'queued';
     record.run.status = 'cancelled';
     record.run.finished_at = new Date().toISOString();
     record.abort.abort();
+    void this.persist(record);
     if (wasQueued) {
       this.waiting[record.keyScope] = this.waiting[record.keyScope].filter((r) => r !== record);
       this.emit(record, { type: 'run.cancelled' });
@@ -179,9 +180,20 @@ export class AgentService {
   }
 
   /** Reproduce los eventos posteriores a `afterId` y sigue entregando los nuevos. */
-  subscribe(id: string, afterId: number, onEvent: (e: StoredEvent) => void): (() => void) | null {
+  async subscribe(id: string, afterId: number, onEvent: (e: StoredEvent) => void): Promise<(() => void) | null> {
     const record = this.runs.get(id);
-    if (!record) return null;
+    if (!record) {
+      // Ejecución de antes de un reinicio: sus eventos no se guardan, se entrega solo el final.
+      const run = await this.store.getRun(id);
+      if (!run) return null;
+      const terminal: AgentEvent | null =
+        run.status === 'succeeded' ? { type: 'run.completed', run }
+        : run.status === 'failed' ? { type: 'run.failed', error: run.error ?? '', code: 'internal_error' }
+        : run.status === 'cancelled' ? { type: 'run.cancelled' }
+        : null;
+      if (terminal && afterId < 1) onEvent({ id: 1, event: terminal });
+      return () => {};
+    }
     record.events.filter((e) => e.id > afterId).forEach(onEvent);
     if (record.events.some((e) => isTerminal(e.event))) return () => {};
     record.listeners.add(onEvent);
@@ -189,6 +201,13 @@ export class AgentService {
   }
 
   // ----- Interno -----
+
+  /** Guarda el estado actual sin detener la ejecución si la base de datos falla. */
+  private persist(record: RunRecord): Promise<void> {
+    return this.store.saveRun(record.run, record.brandId).catch((error) => {
+      console.error(`No se pudo guardar la ejecución ${record.run.id}:`, error instanceof Error ? error.message : error);
+    });
+  }
 
   private emit(record: RunRecord, event: AgentEvent) {
     const stored = { id: record.events.length + 1, event };
@@ -210,10 +229,9 @@ export class AgentService {
     }
   }
 
-  private history(record: RunRecord): ChatMessage[] {
-    const conv = this.conversations.get(record.run.conversation_id ?? '');
-    const previous = (conv?.runIds ?? [])
-      .map((id) => this.runs.get(id)!.run)
+  private async history(record: RunRecord): Promise<ChatMessage[]> {
+    const conv = await this.getConversation(record.run.conversation_id ?? '');
+    const previous = (conv?.runs ?? [])
       .filter((r) => r.id !== record.run.id && r.status === 'succeeded' && r.answer);
     return previous.flatMap((r): ChatMessage[] => [
       { role: 'user', content: r.question },
@@ -228,9 +246,10 @@ export class AgentService {
       if (!apiKey) throw new OllamaError('ollama_key_rejected', 'La clave ya no está disponible.');
       run.status = 'running';
       run.started_at = new Date().toISOString();
+      await this.persist(record);
       this.emit(record, { type: 'run.started' });
 
-      const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt() }, ...this.history(record), { role: 'user', content: run.question }];
+      const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt() }, ...(await this.history(record)), { role: 'user', content: run.question }];
       const think = parseThink(run.think);
       const maxRounds = this.options.maxToolRounds ?? 6;
       let seq = 0;
@@ -304,11 +323,13 @@ export class AgentService {
 
       run.status = 'succeeded';
       run.finished_at = new Date().toISOString();
+      await this.persist(record);
       this.emit(record, { type: 'run.completed', run });
     } catch (cause) {
       run.finished_at = new Date().toISOString();
       if (record.abort.signal.aborted) {
         run.status = 'cancelled';
+        await this.persist(record);
         this.emit(record, { type: 'run.cancelled' });
         return;
       }
@@ -316,6 +337,7 @@ export class AgentService {
       const error = cause instanceof Error ? cause.message : String(cause);
       run.status = 'failed';
       run.error = error;
+      await this.persist(record);
       this.emit(record, { type: 'run.failed', error, code });
     }
   }

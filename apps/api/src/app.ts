@@ -112,47 +112,47 @@ export function createApp({ ollama, keys, agent }: Deps) {
     }
   };
 
-  app.get('/brands/:brandId/agent/conversations', (c) => c.json({ items: agent.listConversations(c.req.param('brandId')), next_cursor: null }));
+  app.get('/brands/:brandId/agent/conversations', async (c) => c.json({ items: await agent.listConversations(c.req.param('brandId')), next_cursor: null }));
 
   app.post('/brands/:brandId/agent/conversations', async (c) => {
     const started = await begin(c, c.req.param('brandId'), null);
     return started instanceof Response ? started : c.json(started, 202);
   });
 
-  app.get('/agent/conversations/:id', (c) => {
-    const found = agent.getConversation(c.req.param('id'));
+  app.get('/agent/conversations/:id', async (c) => {
+    const found = await agent.getConversation(c.req.param('id'));
     return found ? c.json(found) : problem(c, 404, 'not_found', 'No existe esa conversación.');
   });
 
   app.post('/agent/conversations/:id/messages', async (c) => {
-    const found = agent.getConversation(c.req.param('id'));
+    const found = await agent.getConversation(c.req.param('id'));
     if (!found) return problem(c, 404, 'not_found', 'No existe esa conversación.');
     const started = await begin(c, found.conversation.brand_id, found.conversation.id);
     return started instanceof Response ? started : c.json(started.run, 202);
   });
 
-  app.get('/agent/runs/:id', (c) => {
-    const run = agent.getRun(c.req.param('id'));
+  app.get('/agent/runs/:id', async (c) => {
+    const run = await agent.getRun(c.req.param('id'));
     return run ? c.json(run) : problem(c, 404, 'not_found', 'No existe esa ejecución.');
   });
 
-  app.delete('/agent/runs/:id', (c) => {
-    const result = agent.cancel(c.req.param('id'));
+  app.delete('/agent/runs/:id', async (c) => {
+    const result = await agent.cancel(c.req.param('id'));
     if (result === 'missing') return problem(c, 404, 'not_found', 'No existe esa ejecución.');
     if (result === 'finished') return problem(c, 409, 'run_finished', 'La ejecución ya había terminado.');
     return c.body(null, 204);
   });
 
-  app.get('/agent/runs/:id/events', (c) => {
+  app.get('/agent/runs/:id/events', async (c) => {
     const id = c.req.param('id');
-    if (!agent.getRun(id)) return problem(c, 404, 'not_found', 'No existe esa ejecución.');
+    if (!(await agent.getRun(id))) return problem(c, 404, 'not_found', 'No existe esa ejecución.');
     const after = Number(c.req.header('last-event-id') ?? 0) || 0;
 
     return streamSSE(c, async (stream) => {
       const pending: { id: number; event: { type: string } }[] = [];
       let wake: (() => void) | null = null;
       let closed = false;
-      const unsubscribe = agent.subscribe(id, after, (e) => {
+      const unsubscribe = await agent.subscribe(id, after, (e) => {
         pending.push(e);
         wake?.();
       });

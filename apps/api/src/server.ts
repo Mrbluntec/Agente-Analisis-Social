@@ -3,6 +3,7 @@
 //   OLLAMA_BASE_URL       https://ollama.com por defecto; admite un Ollama local
 //   ATALAYA_DATA_DIR      dónde se guardan las claves cifradas (apps/api/.data)
 //   ATALAYA_MASTER_KEY    clave maestra de 32 bytes en base64; si falta, se genera una local
+//   DATABASE_URL          PostgreSQL para conversaciones y ejecuciones; si falta, en memoria
 
 import { serve } from '@hono/node-server';
 import { dirname, join } from 'node:path';
@@ -11,6 +12,7 @@ import { AgentService } from './agent/service';
 import { createApp } from './app';
 import { KeyStore } from './keys';
 import { Ollama } from './ollama';
+import { createAgentStore } from './store';
 
 /** Un modelo solo aparece en la lista si declara estas tres capacidades. */
 export const REQUIRED_CAPABILITIES = ['vision', 'tools', 'thinking'];
@@ -22,9 +24,15 @@ const dataDir = process.env.ATALAYA_DATA_DIR ?? join(here, '..', '.data');
 
 const ollama = new Ollama(baseUrl);
 const keys = new KeyStore(dataDir, process.env.ATALAYA_MASTER_KEY);
-const agent = new AgentService(ollama, keys, { requiredCapabilities: REQUIRED_CAPABILITIES });
+const store = createAgentStore();
+if (store.recoverInterrupted) {
+  const n = await store.recoverInterrupted();
+  if (n > 0) console.log(`${n} ejecuciones interrumpidas por el reinicio quedaron como fallidas.`);
+}
+const agent = new AgentService(ollama, keys, { requiredCapabilities: REQUIRED_CAPABILITIES, store });
 
 serve({ fetch: createApp({ ollama, keys, agent }).fetch, port }, () => {
   console.log(`Atalaya API en http://localhost:${port}/v1`);
+  console.log(`Almacén del agente: ${store.kind === 'postgres' ? 'PostgreSQL' : 'memoria'}`);
   console.log(`Ollama: ${baseUrl} · clave ${keys.active() ? 'registrada' : 'pendiente'}`);
 });
