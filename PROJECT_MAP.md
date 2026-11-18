@@ -35,11 +35,22 @@ Fuente única: `packages/tokens/tokens.json` (temas dark y light). Se genera con
 | packages/core | Muestra, analítica, tipos | jarvis-code | Estable |
 | Conectores de redes | Ingesta real | jarvis-code | No existe |
 | Login / multi-tenant | Usuarios y aislamiento | jarvis-code | No existe |
+| .mcp.json | MCP Meta Social Technologies (apps, App Review, webhooks) | jarvis-code | Registrado; OAuth pendiente en local |
 | CI / despliegue | Pruebas automáticas y hosting | jarvis-code | No existe |
 
-## 4. Checkpoint ejecutivo
+## 4. Integración Instagram (investigación 2026-11-18)
+Detalle y fuentes: `docs/instagram-integracion.md`.
+- Vía elegida (propuesta): **Facebook Login for Business**: única con Business Discovery (competidores) y webhook `story_insights`. Requiere IG profesional vinculada a Página.
+- "En vivo" = sondeo: cuenta cada 1-3 h, media reciente cada hora, historias cada hora (caducan a las 24 h), competidores cada 6-12 h. Retraso de Meta hasta 48 h; Meta guarda 90 días de cuenta.
+- `impressions` retirada (abril 2025): usar `views`. API v27.0.
+- Competidores (máx. 5): seguidores, nº publicaciones, likes/comentarios/vistas por pieza. Sin alcance, demografía ni historias.
+- Login web: OAuth con callback HTTPS del servidor. CLI: navegador + polling a `/auth/cli/poll`, recibe token de Atalaya; el de Meta no sale del servidor.
+- Cuentas de MOGA con testers: acceso estándar, sin App Review. Clientes externos: App Review + verificación de negocio.
+
+## 5. Checkpoint ejecutivo
 - Completado: carpetas completas en GitHub, contrato ajustado, gráficos adjuntos del agente, persistencia del agente en PostgreSQL (opcional por DATABASE_URL).
 - Rama: `claude/zealous-goodall-h4n83x`, sin fusionar a `main`, sin PR.
 - Sin comprobar: conversación real con clave de Ollama Cloud.
 - Pendiente: claves de Ollama aún en disco, no en `ollama_keys`; eventos del streaming no se guardan.
-- Siguiente decisión: alojamiento de PostgreSQL y primera red a conectar (ver informe de estado).
+- Pendiente del Señor: crear app Business en Meta (Facebook Login for Business + Instagram), confirmar IG de MOGA profesional y vinculada a Página, 5 usuarios de competencia, túnel HTTPS (ngrok o Cloudflare), prueba con clave de Ollama.
+- Siguiente decisión: aprobar la vía Facebook Login para construir el conector (tablas, OAuth web y CLI, ingesta).
